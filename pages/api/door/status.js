@@ -2,36 +2,60 @@ import mongoose from "mongoose";
 
 const MONGO_URI = process.env.MONGO_URI;
 
+/* ================== CONNECT MONGODB ================== */
 if (!mongoose.connection.readyState) {
   await mongoose.connect(MONGO_URI);
 }
 
+/* ================== SCHEMA ================== */
 const LogSchema = new mongoose.Schema({
-  state: { type: String, enum: ["OPEN", "CLOSE"], required: true },
-  timestamp: { type: Date, default: Date.now },
+  state: {
+    type: String,
+    enum: ["OPEN", "CLOSE"],
+    required: true,
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
+/* ================== MODEL ================== */
 const Log = mongoose.models.Log || mongoose.model("Log", LogSchema);
 
+/* ================== API HANDLER ================== */
 export default async function handler(req, res) {
-  const date = req.query.date;
-  if (!date) return res.json({ success: false });
 
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
+  // ===== POST: LƯU TRẠNG THÁI CỬA =====
+  if (req.method === "POST") {
+    try {
+      const { state } = req.body;
 
-  const end = new Date(start);
-  end.setHours(23, 59, 59, 999);
+      if (!["OPEN", "CLOSE"].includes(state)) {
+        return res.status(400).json({ error: "Invalid state" });
+      }
 
-  const logs = await Log.find({
-    timestamp: { $gte: start, $lte: end }
-  });
+      await Log.create({ state });
 
-  res.json({
-    success: true,
-    stats: {
-      opens: logs.filter(l => l.state === "OPEN").length,
-      closes: logs.filter(l => l.state === "CLOSE").length
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
-  });
+  }
+
+  // ===== GET: LẤY TRẠNG THÁI MỚI NHẤT =====
+  if (req.method === "GET") {
+    try {
+      const last = await Log.findOne().sort({ timestamp: -1 });
+
+      return res.json({
+        state: last ? last.state : "UNKNOWN",
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ===== METHOD KHÁC =====
+  res.status(405).json({ error: "Method Not Allowed" });
 }
