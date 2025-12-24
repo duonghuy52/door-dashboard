@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Door Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body class="bg-gray-50 p-6">
+
+<h1 class="text-3xl font-black text-center text-blue-600 mb-6">
+  SMART DOOR CONTROL
+</h1>
+
+<!-- ===== ĐIỀU KHIỂN + TRẠNG THÁI ===== -->
+<div class="grid grid-cols-3 gap-6 max-w-3xl mx-auto mb-8">
+
+  <button id="btnOpen"
+    class="bg-emerald-500 text-white p-6 rounded-xl font-black">
+    OPEN
+  </button>
+
+  <button id="btnClose"
+    class="bg-rose-500 text-white p-6 rounded-xl font-black">
+    CLOSE
+  </button>
+
+  <div class="bg-white p-4 rounded-xl text-center shadow">
+    <div id="emoji" class="text-4xl">🔒</div>
+    <div id="status" class="font-black text-xl text-rose-600">Đóng</div>
+    <div id="time" class="text-xs text-gray-400">--</div>
+  </div>
+
+</div>
+
+<!-- ===== THỐNG KÊ ===== -->
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow">
+
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="font-black text-xl">📊 Thống kê theo ngày</h2>
+    <input type="date" id="datePicker" class="border p-2 rounded">
+  </div>
+
+  <div class="grid grid-cols-2 gap-6 text-center">
+    <div>
+      <p class="font-black text-emerald-600">SỐ LẦN MỞ</p>
+      <p id="openCnt" class="text-5xl font-black">0</p>
+    </div>
+    <div>
+      <p class="font-black text-rose-600">SỐ LẦN ĐÓNG</p>
+      <p id="closeCnt" class="text-5xl font-black">0</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+let lastState = null;
+const picker = document.getElementById("datePicker");
+
+picker.valueAsDate = new Date();
+loadStats(picker.value);
+
+picker.onchange = () => loadStats(picker.value);
+
+// ===== MQTT =====
+client.on('connect', () => {
+  client.subscribe('door/state');
+
+  btnOpen.onclick = () => client.publish('door/command', 'OPEN');
+  btnClose.onclick = () => client.publish('door/command', 'CLOSE');
+});
+
+client.on('message', (topic, message) => {
+  const state = message.toString();
+  if (state === lastState) return;
+
+  lastState = state;
+  updateUI(state);
+  saveToday(state);
+  loadStats(picker.value);
+});
+
+// ===== UI =====
+function updateUI(state) {
+  emoji.innerText = state === "OPEN" ? "🔓" : "🔒";
+  status.innerText = state === "OPEN" ? "Mở" : "Đóng";
+  status.className =
+    state === "OPEN"
+      ? "font-black text-xl text-emerald-600"
+      : "font-black text-xl text-rose-600";
+
+  time.innerText = new Date().toLocaleString();
+}
+
+// ===== LƯU THEO NGÀY =====
+function saveToday(state) {
+  const key = "door-stats-" + new Date().toISOString().slice(0,10);
+  const data = JSON.parse(localStorage.getItem(key)) || { open: 0, close: 0 };
+
+  if (state === "OPEN") data.open++;
+  if (state === "CLOSE") data.close++;
+
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ===== LOAD THỐNG KÊ =====
+function loadStats(date) {
+  const key = "door-stats-" + date;
+  const data = JSON.parse(localStorage.getItem(key)) || { open: 0, close: 0 };
+
+  openCnt.innerText = data.open;
+  closeCnt.innerText = data.close;
+}
+</script>
+
+</body>
+</html>
