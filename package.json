@@ -1,7 +1,0 @@
-{
-  "name": "smart-door",
-  "private": true,
-  "dependencies": {
-    "mongoose": "^8.0.0"
-  }
-}
