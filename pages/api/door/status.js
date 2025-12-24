@@ -14,20 +14,24 @@ const LogSchema = new mongoose.Schema({
 const Log = mongoose.models.Log || mongoose.model("Log", LogSchema);
 
 export default async function handler(req, res) {
+  const date = req.query.date;
+  if (!date) return res.json({ success: false });
 
-  if (req.method === "POST") {
-    const { state } = req.body;
-    if (!["OPEN", "CLOSE"].includes(state))
-      return res.status(400).json({ error: "Invalid state" });
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
 
-    await Log.create({ state });
-    return res.json({ success: true });
-  }
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
 
-  if (req.method === "GET") {
-    const last = await Log.findOne().sort({ timestamp: -1 });
-    return res.json({ state: last ? last.state : "UNKNOWN" });
-  }
+  const logs = await Log.find({
+    timestamp: { $gte: start, $lte: end }
+  });
 
-  res.status(405).end();
+  res.json({
+    success: true,
+    stats: {
+      opens: logs.filter(l => l.state === "OPEN").length,
+      closes: logs.filter(l => l.state === "CLOSE").length
+    }
+  });
 }
